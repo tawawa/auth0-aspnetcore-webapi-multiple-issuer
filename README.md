@@ -1,27 +1,14 @@
 # Authenticate with JWT (RS256)
 
-This example shows how to authenticate a user using a JSON Web Token (JWT) which is signed using RS256.
-
-You can read a quickstart for this sample [here](https://auth0.com/docs/quickstart/backend/aspnet-core-webapi/01-authentication-rs256). 
+This example shows how to configure the JWT middleware when handling tokens coming from multiple issuers. 
 
 ## Getting Started
 
 To run this quickstart you can fork and clone this repo.
 
-Ensure that you have configured your application in Auth0 to use RS256 for signing JSON Web Tokens.
+Ensure that you have configured your applications and APIs in Auth0 to use RS256 for signing JSON Web Tokens. Also update the middleware registration code to specify your own issuers and audience.
 
-Next, update the `appsettings.json` with your Auth0 settings:
-
-```json
-{
-  "Auth0": {
-    "Domain": "Your Auth0 domain",
-    "ClientId": "Your Auth0 Client Id"
-  } 
-}
-```
-
-Then restore the NuGet packages and run the application:
+Restore the NuGet packages and run the application:
 
 ```bash
 # Install the dependencies
@@ -40,28 +27,28 @@ You can shut down the web server manually by pressing Ctrl-C.
 ```csharp
 // /Startup.cs
 
-var options = new JwtBearerOptions
+public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory)
 {
-    Audience = Configuration["auth0:clientId"],
-    Authority = $"https://{Configuration["auth0:domain"]}/"
-};
-app.UseJwtBearerAuthentication(options);
-```
+    loggerFactory.AddConsole(Configuration.GetSection("Logging"));
+    loggerFactory.AddDebug();
 
-### 2. Secure an API method
+    string[] issuers = {
+        "https://jerrie.auth0.com/",
+        "https://auth0pnp.auth0.com/"
+    };
 
-```csharp
-// /Controllers/PingController.cs
-
-[Route("api")]
-public class PingController : Controller
-{
-    [Authorize]
-    [HttpGet]
-    [Route("ping/secure")]
-    public string PingSecured()
+    var keyResolver = new MultipleIssuerSigningKeyResolver();
+    var options = new JwtBearerOptions
     {
-        return "All good. You only get this message if you are authenticated.";
-    }
+        TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidAudience = "https://rs256.test.api",
+            ValidIssuers = new List<string>(issuers),
+            IssuerSigningKeyResolver = (token, securityToken, kid, parameters) => keyResolver.GetSigningKey(securityToken.Issuer, kid)
+        }
+    };
+    app.UseJwtBearerAuthentication(options);
+
+    app.UseMvc();
 }
 ```
